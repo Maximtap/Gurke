@@ -3,6 +3,7 @@ import random
 import math
 import hashlib
 from sortedcontainers import SortedList
+from cryptography.hazmat.primitives.asymmetric import x25519
 
 
 def mod_print(*args):
@@ -48,6 +49,26 @@ class dhnike:
         #TODO add hashing
         return pow(pk, sk, self.p)
 
+
+class curve_nike:
+    def gen(self, seed=None):
+        if seed:
+            # Hash the seed to get a 32-byte key
+            hashed_seed = hashlib.sha256(seed).digest()
+
+            # Create a private key from the hashed seed
+            private_key = x25519.X25519PrivateKey.from_private_bytes(hashed_seed)
+        else:
+            private_key = x25519.X25519PrivateKey.generate()
+        public_key = private_key.public_key()
+        return public_key, private_key
+    
+    def genpk(self, sk):
+        return sk.public_key()
+    
+    def key(self, pk, sk):
+        return sk.exchange(pk)
+        
 
 class ak:
     
@@ -114,6 +135,15 @@ def H(*inputs):
     dk, k = int.from_bytes(res[:256]), int.from_bytes(res[256:])
     return dk, k
 
+def Hcurve(*inputs):
+    """Random oracle into dk(curve) x k  spaces"""
+    hasher = hashlib.sha256()
+    hasher.update(str(inputs).encode())
+    res = hasher.digest()
+    res1, res2 = res[:32], res[32:]
+    private_key = x25519.X25519PrivateKey.from_private_bytes(res1)
+
+    return private_key, res2
 
 
 # static path logic
@@ -422,6 +452,18 @@ class BK:
         self.H1 = H1
         self.H2 = H2
         self.AK:ak = agnostic
+    
+    @staticmethod
+    def standard():
+        """
+        constructor for a standard configuration
+        """
+        nk = curve_nike()
+        agnostic = ak(nk)
+        tree = Tree()
+
+        bk = BK(tree_structure=tree, H1=Hcurve, H2=Hcurve, agnostic=agnostic)
+        return bk
 
     def gen(self, n):
         """
